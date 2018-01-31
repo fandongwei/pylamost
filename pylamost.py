@@ -9,6 +9,7 @@ import astropy.io.fits
 import numpy
 import scipy.signal
 import matplotlib.pyplot as plt
+import json
 
 class lamost:
     email=None
@@ -64,6 +65,7 @@ class lamost:
         savefile=savedir+'/'+response.getheader("Content-disposition").split('=')[1]
         with open(savefile, 'wb') as fh:
             fh.write(data)
+        return savefile
 
     def getUrl(self, url, params=None):
         if params is None:
@@ -77,17 +79,17 @@ class lamost:
 
     def downloadCatalog(self, catname, savedir='./'):
         caturl='http://{0}.lamost.org{1}/catdl?name={2}&token={3}'.format(self.__getDataset(), self.__getVersion(), catname, self.token)
-        self.download(url, savedir)
+        return self.download(url, savedir)
 
     def downloadFits(self, obsid, savedir='./'):
         if not self.__detectToken(): return
         fitsurl='http://{0}.lamost.org{1}/spectrum/fits/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
-        self.download(fitsurl, savedir)
+        return self.download(fitsurl, savedir)
 
     def downloadPng(self, obsid, savedir='./'):
         if not self.__detectToken(): return
         pngurl='http://{0}.lamost.org{1}/spectrum/png/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
-        self.download(pngurl, savedir)
+        return self.download(pngurl, savedir)
 
     def getFitsCsv(self, obsid):
         if not self.__detectToken(): return None
@@ -99,7 +101,12 @@ class lamost:
         #url='http://{0}.lamost.org{1}/spectrum/info/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
         #return self.getUrl(url, params)
         url='http://{0}.lamost.org{1}/spectrum/info/{2}'.format(self.__getDataset(), self.__getVersion(), obsid)
-        return self.getUrl(url, {'token':self.token})
+        info=self.getUrl(url, {'token':self.token})
+        info=json.loads(info)
+        res={}
+        for prop in info["response"]:
+            res[prop["what"]]=prop["data"]
+        return res
 
     #Cone Search Protocol
     def conesearch(self, ra, dec, radius):
@@ -153,3 +160,6 @@ class lamost:
         plt.xlabel('Wavelength [Ångströms]')
         plt.ylabel('Flux')
         plt.show()
+        
+    def downloadAndPlotSpectrum(self, obsid):
+        self.plotFits(self.downloadFits(obsid))
