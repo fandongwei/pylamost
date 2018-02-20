@@ -12,15 +12,13 @@ import matplotlib.pyplot as plt
 import json
 
 class lamost:
-    email=None
-    token=None
-    dataset=None
-    version=None
-    __isdev=False
-
     def __init__(self, isdev=False, dataset=5):
         self.__isdev=isdev
         self.dataset=dataset
+        self.email=None
+        self.token=None
+        self.version=None
+        self.__isdev=False
 
     def __getDataset(self):
         prefix='dr5'
