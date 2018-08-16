@@ -188,9 +188,31 @@ class lamost:
             pageindex+=1
         return result
     
-    def downloadQueryResult(self, sqlid, filename):
+    def __downloadQueryResult(self, sqlid, filename):
         res=self.getQueryResult(sqlid)
         f=csv.writer(open(filename,'w'))
         f.writerow(res[0].keys())  # header row
         for row in res:
             f.writerow(row.values())
+            
+    def downloadQueryResult(self, sqlid, filename):
+        f=csv.writer(open(filename,'w'))
+        #
+        count = self.getQueryResultCount(sqlid)
+        pagesize=10000
+        start = 1
+        pageindex=1
+        result=[]
+        headerWritten=False
+        while start<count:
+            arr = self.__getQueryResultByPage(sqlid, pagesize, pageindex)
+            if not headerWritten:
+                f.writerow(arr[0].keys())  # header row
+                headerWritten=True
+            #
+            for row in arr:
+                f.writerow(row.values())            
+            #
+            start+=pagesize
+            pageindex+=1
+        return result
