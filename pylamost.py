@@ -10,6 +10,7 @@ import numpy
 import scipy.signal
 import matplotlib.pyplot as plt
 import json
+import csv
 
 class lamost:
     def __init__(self, isdev=False, dataset=5):
@@ -19,6 +20,7 @@ class lamost:
         self.token=None
         self.version=None
         self.__isdev=False
+        self.__detectToken()
 
     def __getDataset(self):
         prefix='dr5'
@@ -161,3 +163,34 @@ class lamost:
         
     def downloadAndPlotSpectrum(self, obsid):
         self.plotFits(self.downloadFits(obsid))
+    
+    def getQueryResultCount(self, sqlid):
+        qurl='http://{0}.lamost.org{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getDataset(), self.__getVersion(), sqlid,self.token)
+        r=requests.post(qurl)
+        info=json.loads(r.text)
+        return int(info["total"])
+    
+    def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1):
+        qurl='http://{0}.lamost.org{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getDataset(), self.__getVersion(), sqlid,self.token, pagesize, pageindex)
+        r=requests.post(qurl)
+        return json.loads(r.text)["rows"]
+    
+    def getQueryResult(self, sqlid):
+        count = self.getQueryResultCount(sqlid)
+        pagesize=10000
+        start = 1
+        pageindex=1
+        result=[]
+        while start<count:
+            arr = self.__getQueryResultByPage(sqlid, pagesize, pageindex)
+            result.extend(arr)
+            start+=pagesize
+            pageindex+=1
+        return result
+    
+    def downloadQueryResult(self, sqlid, filename):
+        res=self.getQueryResult(sqlid)
+        f=csv.writer(open(filename,'w'))
+        f.writerow(res[0].keys())  # header row
+        for row in res:
+            f.writerow(row.values())
