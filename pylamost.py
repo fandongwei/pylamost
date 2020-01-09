@@ -13,11 +13,11 @@ import json
 import csv
 
 class lamost:
-    def __init__(self, isdev=False, dataset=5):
-        self.__isdev=isdev
+    def __init__(self, token=None, dataset=5, version=3):
+        self.__isdev=False
         self.dataset=dataset
         self.email=None
-        self.token=None
+        self.token=token
         self.version=None
         self.__isdev=False
         self.__detectToken()
@@ -145,7 +145,7 @@ class lamost:
         pixel_num = head['NAXIS1'] 
         specflux = scidata[0,]
         spec_noconti = scidata[2,]
-        wavelength=numpy.linspace(0,pixel_num,pixel_num)
+        wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
         wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
         hdulist.close()
         #
