@@ -13,7 +13,7 @@ import json
 import csv
 
 class lamost:
-    def __init__(self, token=None, dataset=5, version=3):
+    def __init__(self, token=None, dataset=8, version=2.0):
         self.__isdev=False
         self.dataset=dataset
         self.email=None
@@ -21,18 +21,6 @@ class lamost:
         self.version=None
         self.__isdev=False
         self.__detectToken()
-
-    def __getDataset(self):
-        prefix='dr5'
-        if self.dataset is not None:
-            prefix = 'dr%d'%self.dataset
-        if self.__isdev: return 'l'+prefix
-        else: return prefix
-
-    def __getVersion(self):
-        if self.version is not None:
-            return '/v%d'%self.version
-        return ''
 
     __config=None
     __config_file_path=os.path.expanduser('~')+'/pylamost.ini'
@@ -59,6 +47,16 @@ class lamost:
         self.token=cf['token']
         return True
 
+    def __getRoot(self):
+        if self.dataset<6:
+            url = 'http://dr{0}.lamost.org'.format(self.dataset)
+        else:
+            url = 'http://www.lamost.org/dr{0}'.format(self.dataset)
+        #
+        if self.version is not None:
+            return '{0}/v{1}'.format(url, self.version)
+        return url
+
     def download(self, url, savedir='./'):
         response = urllib.request.urlopen(url)
         data = response.read()
@@ -78,76 +76,83 @@ class lamost:
         return data
 
     def downloadCatalog(self, catname, savedir='./'):
-        caturl='http://{0}.lamost.org{1}/catdl?name={2}&token={3}'.format(self.__getDataset(), self.__getVersion(), catname, self.token)
-        return self.download(url, savedir)
+        caturl='{0}/catdl?name={1}&token={2}'.format(self.__getRoot(), catname, self.token)
+        return self.download(caturl, savedir)
 
-    def downloadFits(self, obsid, savedir='./'):
+    def downloadFits(self, obsid, ismed=False, savedir='./'):
         if not self.__detectToken(): return
-        fitsurl='http://{0}.lamost.org{1}/spectrum/fits/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
+        fitsurl='{0}/{1}spectrum/fits/{2}?token={3}'.format(self.__getRoot(),'med' if ismed else '', obsid, self.token)
         return self.download(fitsurl, savedir)
 
     def downloadPng(self, obsid, savedir='./'):
         if not self.__detectToken(): return
-        pngurl='http://{0}.lamost.org{1}/spectrum/png/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
+        pngurl='{0}/spectrum/png/{1}?token={2}'.format(self.__getRoot(), obsid, self.token)
         return self.download(pngurl, savedir)
 
-    def getFitsCsv(self, obsid):
+    def getFitsCsv(self, obsid, ismed=False):
         if not self.__detectToken(): return None
-        url='http://{0}.lamost.org{1}/spectrum/fits2csv/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
+        url='{0}/{1}spectrum/fits2csv/{2}?token={3}'.format(self.__getRoot(),'med' if ismed else '', obsid, self.token)
         return self.getUrl(url)
 
-    def getInfo(self, obsid):
+    def getInfo(self, obsid, ismed=False):
         if not self.__detectToken(): return None
-        #url='http://{0}.lamost.org{1}/spectrum/info/{2}?token={3}'.format(self.__getDataset(), self.__getVersion(), obsid, self.token)
-        #return self.getUrl(url, params)
-        url='http://{0}.lamost.org{1}/spectrum/info/{2}'.format(self.__getDataset(), self.__getVersion(), obsid)
+        url='{0}/{1}spectrum/info/{2}'.format(self.__getRoot(),'med' if ismed else '', obsid)
         info=self.getUrl(url, {'token':self.token})
         info=json.loads(info)
         res={}
-        for prop in info["response"]:
-            res[prop["what"]]=prop["data"]
+        if ismed:
+            return info['rows']
+        else:
+            for prop in info["response"]:
+                res[prop["what"]]=prop["data"]
         return res
 
     #Cone Search Protocol
-    def conesearch(self, ra, dec, radius):
+    def conesearch(self, ra, dec, radius, ismed=False):
         if not self.__detectToken(): return
-        conesearchurl='http://{0}.lamost.org{1}/voservice/conesearch?ra={2}&dec={3}&sr={4}&token={5}'.format(self.__getDataset(), self.__getVersion(), ra, dec, radius, self.token)
+        conesearchurl='{0}/{1}voservice/conesearch?ra={2}&dec={3}&sr={4}&token={5}'.format(self.__getRoot(),'med' if ismed else '', ra, dec, radius, self.token)
         return self.getUrl(conesearchurl)
 
     #Simple Spectral Access Protocol
-    def ssap(self, ra, dec, radius):
+    def ssap(self, ra, dec, radius, ismed=False):
         if not self.__detectToken(): return
-        ssapurl='http://{0}.lamost.org{1}/voservice/ssap?pos={2},{3}&size={4}&token={5}'.format(self.__getDataset(), self.__getVersion(), ra, dec, radius, self.token)
+        ssapurl='{0}/{1}voservice/ssap?pos={2},{3}&size={4}&token={5}'.format(self.__getRoot(),'med' if ismed else '', ra, dec, radius, self.token)
         return self.getUrl(ssapurl)
 
     def sql(self, sql):
         if not self.__detectToken(): return
-        sqlurl='http://{0}.lamost.org{1}/sql/q?&token={2}'.format(self.__getDataset(), self.__getVersion(), self.token)
+        sqlurl='{0}/sql/q?&token={1}'.format(self.__getRoot(), self.token)
         return self.getUrl(sqlurl, {'output.fmt':'csv', 'sql':sql})
 
-    def query(self, params):
+    def query(self, params,ismed=False):
         if not self.__detectToken(): return
-        qurl='http://{0}.lamost.org{1}/q?token={2}'.format(self.__getDataset(), self.__getVersion(), self.token)
+        qurl='{0}{1}/q?token={2}'.format(self.__getRoot(),'/medcas' if ismed else '', self.token)
         return self.getUrl(qurl, params)
     
-    def query2(self, params, files):
+    def query2(self, params, files, ismed=False):
         if not self.__detectToken(): return
-        qurl='http://{0}.lamost.org{1}/q?token={2}'.format(self.__getDataset(), self.__getVersion(),self.token)
+        qurl='{0}{1}/q?token={2}'.format(self.__getRoot(),'/medcas' if ismed else '',self.token)
         r=requests.post(qurl, data=params, files=files)
         return str(r.text)
     
     def readFits(self, filename):
         hdulist = astropy.io.fits.open(filename)
-        head = hdulist[0].header
-        scidata = hdulist[0].data
-        coeff0 = head['COEFF0']
-        coeff1 = head['COEFF1']
-        pixel_num = head['NAXIS1'] 
-        specflux = scidata[0,]
-        spec_noconti = scidata[2,]
-        wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
-        wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
-        hdulist.close()
+        len_list=len(hdulist)
+        if 1==len_list:
+            head = hdulist[0].header
+            scidata = hdulist[0].data
+            coeff0 = head['COEFF0']
+            coeff1 = head['COEFF1']
+            pixel_num = head['NAXIS1'] 
+            specflux = scidata[0,]
+            spec_noconti = scidata[2,]
+            wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
+            wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
+            hdulist.close()
+        elif 2==len_list:
+            scidata = hdulist[1].data
+            wavelength = scidata[0][2]
+            specflux = scidata[0][0]
         #
         spec_smooth_7=scipy.signal.medfilt(specflux,7)
         spec_smooth_15=scipy.signal.medfilt(specflux,15)
@@ -164,14 +169,14 @@ class lamost:
     def downloadAndPlotSpectrum(self, obsid):
         self.plotFits(self.downloadFits(obsid))
     
-    def getQueryResultCount(self, sqlid):
-        qurl='http://{0}.lamost.org{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getDataset(), self.__getVersion(), sqlid,self.token)
+    def getQueryResultCount(self, sqlid, ismed=False):
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
         r=requests.post(qurl)
         info=json.loads(r.text)
         return int(info["total"])
     
-    def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1):
-        qurl='http://{0}.lamost.org{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getDataset(), self.__getVersion(), sqlid,self.token, pagesize, pageindex)
+    def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1, ismed=False):
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
         r=requests.post(qurl)
         return json.loads(r.text)["rows"]
     
