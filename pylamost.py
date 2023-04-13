@@ -135,40 +135,6 @@ class lamost:
         r=requests.post(qurl, data=params, files=files)
         return str(r.text)
     
-    def readFits(self, filename):
-        hdulist = astropy.io.fits.open(filename)
-        len_list=len(hdulist)
-        if 1==len_list:
-            head = hdulist[0].header
-            scidata = hdulist[0].data
-            coeff0 = head['COEFF0']
-            coeff1 = head['COEFF1']
-            pixel_num = head['NAXIS1'] 
-            specflux = scidata[0,]
-            spec_noconti = scidata[2,]
-            wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
-            wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
-            hdulist.close()
-        elif 2==len_list:
-            scidata = hdulist[1].data
-            wavelength = scidata[0][2]
-            specflux = scidata[0][0]
-        #
-        spec_smooth_7=scipy.signal.medfilt(specflux,7)
-        spec_smooth_15=scipy.signal.medfilt(specflux,15)
-        return (wavelength, specflux, spec_smooth_7, spec_smooth_15)
-    
-    def plotFits(self, filename):
-        wavelength, specflux, spec_smooth_7, spec_smooth_15 = self.readFits(filename)        
-        plt.figure().set_size_inches(18.5, 6.5, forward=True)
-        plt.plot(wavelength, specflux)
-        plt.xlabel('Wavelength [Ångströms]')
-        plt.ylabel('Flux')
-        plt.show()
-        
-    def downloadAndPlotSpectrum(self, obsid):
-        self.plotFits(self.downloadFits(obsid))
-    
     def getQueryResultCount(self, sqlid, ismed=False):
         qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
         r=requests.post(qurl)
@@ -221,3 +187,63 @@ class lamost:
             start+=pagesize
             pageindex+=1
         return result
+    
+    def readLRSFits(self, filename):
+        hdulist = astropy.io.fits.open(filename)
+        len_list=len(hdulist)
+        if 1==len_list:
+            head = hdulist[0].header
+            scidata = hdulist[0].data
+            coeff0 = head['COEFF0']
+            coeff1 = head['COEFF1']
+            pixel_num = head['NAXIS1'] 
+            specflux = scidata[0,]
+            spec_noconti = scidata[2,]
+            wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
+            wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
+            hdulist.close()
+        elif 2==len_list:
+            scidata = hdulist[1].data
+            wavelength = scidata[0][2]
+            specflux = scidata[0][0]
+        #
+        spec_smooth_7=scipy.signal.medfilt(specflux,7)
+        spec_smooth_15=scipy.signal.medfilt(specflux,15)
+        return (wavelength, specflux, spec_smooth_7, spec_smooth_15)
+    
+    def plotLRSFits(self, filename):
+        wavelength, specflux, spec_smooth_7, spec_smooth_15 = self.readLRSFits(filename)        
+        plt.figure().set_size_inches(18.5, 6.5, forward=True)
+        plt.plot(wavelength, specflux)
+        plt.xlabel('Wavelength [Ångströms]')
+        plt.ylabel('Flux')
+        plt.show()
+        
+    def downloadAndPlotLRSSpectrum(self, obsid):
+        self.plotLRSFits(self.downloadFits(obsid))
+    
+    def readMRSFits(self, filename):
+        hdulist = astropy.io.fits.open(filename)
+        len_list=len(hdulist)
+        data={}
+        for i in range(1, len_list):
+            header = hdulist[i].header
+            scidata = hdulist[i].data
+            specflux = scidata[0][0]
+            wavelength = scidata[0][2]
+            data[header['EXTNAME']]={'wavelength':wavelength, 'specflux':specflux}
+        hdulist.close()
+        #
+        return data
+    
+    def plotMRSFits(self, filename):
+        data = self.readMRSFits(filename)        
+        plt.figure().set_size_inches(18.5, 6.5, forward=True)
+        for k,v in data.items():
+            plt.plot(v['wavelength'], v['specflux'])
+        plt.xlabel('Wavelength [Ångströms]')
+        plt.ylabel('Flux')
+        plt.show()
+        
+    def downloadAndPlotMRSSpectrum(self, obsid):
+        self.plotMRSFits(self.downloadFits(obsid,ismed=True))
