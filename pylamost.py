@@ -201,12 +201,12 @@ class lamost:
             spec_noconti = scidata[2,]
             wavelength=numpy.linspace(0,pixel_num-1,pixel_num)
             wavelength=numpy.power(10,(coeff0+wavelength*coeff1))
-            hdulist.close()
         elif 2==len_list:
             scidata = hdulist[1].data
             wavelength = scidata[0][2]
             specflux = scidata[0][0]
         #
+        hdulist.close()
         spec_smooth_7=scipy.signal.medfilt(specflux,7)
         spec_smooth_15=scipy.signal.medfilt(specflux,15)
         return (wavelength, specflux, spec_smooth_7, spec_smooth_15)
