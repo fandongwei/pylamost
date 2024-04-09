@@ -13,13 +13,12 @@ import json
 import csv
 
 class lamost:
-    def __init__(self, token=None, dataset=8, version=2.0):
-        self.__isdev=False
+    def __init__(self, token=None, dataset=8, version=2.0, is_dev=False):
+        self.__isdev=is_dev
         self.dataset=dataset
         self.email=None
         self.token=token
-        self.version=None
-        self.__isdev=False
+        self.version=version
         self.__detectToken()
 
     __config=None
@@ -49,9 +48,15 @@ class lamost:
 
     def __getRoot(self):
         if self.dataset<6:
-            url = 'http://dr{0}.lamost.org'.format(self.dataset)
+            if self.__isdev:
+                url = 'http://ldr{0}.lamost.org'.format(self.dataset)
+            else:
+                url = 'http://dr{0}.lamost.org'.format(self.dataset)
         else:
-            url = 'http://www.lamost.org/dr{0}'.format(self.dataset)
+            if self.__isdev:
+                url = 'http://www2.lamost.org/dr{0}'.format(self.dataset)
+            else:
+                url = 'http://www.lamost.org/dr{0}'.format(self.dataset)
         #
         if self.version is not None:
             return '{0}/v{1}'.format(url, self.version)
@@ -122,7 +127,7 @@ class lamost:
     def sql(self, sql):
         if not self.__detectToken(): return
         sqlurl='{0}/sql/q?&token={1}'.format(self.__getRoot(), self.token)
-        return self.getUrl(sqlurl, {'output.fmt':'csv', 'sql':sql})
+        return self.getUrl(sqlurl, {'output.fmt':'csv','fmt':'csv', 'sql':sql})
 
     def query(self, params,ismed=False):
         if not self.__detectToken(): return
@@ -136,13 +141,13 @@ class lamost:
         return str(r.text)
     
     def getQueryResultCount(self, sqlid, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&fmt=datagrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
         r=requests.post(qurl)
         info=json.loads(r.text)
         return int(info["total"])
     
     def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&fmt=datagrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
         r=requests.post(qurl)
         return json.loads(r.text)["rows"]
     
