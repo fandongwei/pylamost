@@ -124,10 +124,10 @@ class lamost:
         ssapurl='{0}/{1}voservice/ssap?pos={2},{3}&size={4}&token={5}'.format(self.__getRoot(),'med' if ismed else '', ra, dec, radius, self.token)
         return self.getUrl(ssapurl)
 
-    def sql(self, sql):
+    def sql(self, sql, fmt='json'):
         if not self.__detectToken(): return
         sqlurl='{0}/sql/q?&token={1}'.format(self.__getRoot(), self.token)
-        return self.getUrl(sqlurl, {'output.fmt':'csv','fmt':'csv', 'sql':sql})
+        return self.getUrl(sqlurl, {'output.fmt':fmt, 'sql':sql})
 
     def query(self, params,ismed=False):
         if not self.__detectToken(): return
@@ -141,13 +141,13 @@ class lamost:
         return str(r.text)
     
     def getQueryResultCount(self, sqlid, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&fmt=datagrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
         r=requests.post(qurl)
         info=json.loads(r.text)
         return int(info["total"])
     
     def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&fmt=datagrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
+        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
         r=requests.post(qurl)
         return json.loads(r.text)["rows"]
     
