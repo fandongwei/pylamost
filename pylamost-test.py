@@ -47,7 +47,7 @@ print(med)
 
 
 # query low resolution catalog by ra,dec file
-params={'output.fmt':'csv','pos.type':'proximity'}
+params={'pos_group':'ra,dec','output.fmt':'csv','pos.type':'proximity'}
 files={'pos.posfile':('sample.txt', open('sample.txt', 'r'))}
 low=lm.query2(params, files)
 print(low)
