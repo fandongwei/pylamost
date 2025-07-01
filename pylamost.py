@@ -2,33 +2,35 @@
 # -*- coding: UTF-8 -*-
 # packages needed: urllib.request, urllib.parse, requests, pyfits, numpy, scipy.signal
 import os
-import urllib.request
-import urllib.parse
 import requests
 import astropy.io.fits
 import numpy
 import scipy.signal
 import matplotlib.pyplot as plt
-import json
 import csv
+import warnings
+# 忽略urllib3的所有警告
+warnings.filterwarnings('ignore', module='urllib3')
 
 class lamost:
-    def __init__(self, token=None, dataset=8, version=2.0, is_dev=False):
-        self.__isdev=is_dev
-        self.dataset=dataset
-        self.email=None
-        self.token=token
-        self.version=version
-        self.__detectToken()
+    def __init__(self, token=None, dr_version='dr10', sub_version='v2.0', is_dev=False):
+        self.__isdev = is_dev
+        self.dr_version = dr_version
+        self.sub_version = sub_version
+        self.email = None
+        self.token = token
+        if is_dev:
+            self.openapi_base = 'https://www2.lamost.org/openapi'
+        else:
+            self.openapi_base = 'https://www.lamost.org/openapi'
+        self._detect_token()
 
     __config=None
     __config_file_path=os.path.expanduser('~')+'/pylamost.ini'
     
-    def __getConfig(self, reload=False):
+    def _get_config(self, reload=False):
         if not os.path.exists(self.__config_file_path): return None
-        
         if not reload and None!=self.__config: return self.__config
-        
         with open(self.__config_file_path) as fh:
             self.__config={}
             for line in fh:
@@ -37,163 +39,127 @@ class lamost:
                 self.__config[k.strip()]=v.strip()
         return self.__config
 
-    def __detectToken(self):
+    def _detect_token(self):
         if self.token is not None: return True
-        cf = self.__getConfig()
+        cf = self._get_config()
         if cf is None or 'token' not in cf.keys(): 
             print('please set your token')
             return False
         self.token=cf['token']
         return True
 
-    def __getRoot(self):
-        if self.dataset<6:
-            if self.__isdev:
-                url = 'http://ldr{0}.lamost.org'.format(self.dataset)
-            else:
-                url = 'http://dr{0}.lamost.org'.format(self.dataset)
-        else:
-            if self.__isdev:
-                url = 'http://www2.lamost.org/dr{0}'.format(self.dataset)
-            else:
-                url = 'http://www.lamost.org/dr{0}'.format(self.dataset)
-        #
-        if self.version is not None:
-            return '{0}/v{1}'.format(url, self.version)
-        return url
+    def download(self, url, savedir='./', params=None, overwrite=True):
+        response = requests.get(url, params=params, verify=False)
+        filename = savedir + '/' + response.headers.get("Content-disposition").split('=')[1]
+        if os.path.exists(filename) and not overwrite:
+            return filename
+        # download file to temp file
+        savefile = filename+'.temp'
+        # download file chunk by chunk
+        with open(savefile, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        # rename file
+        if os.path.exists(filename):
+            os.remove(filename)
+        os.rename(savefile, filename)
+        return filename
 
-    def download(self, url, savedir='./'):
-        response = urllib.request.urlopen(url)
-        data = response.read()
-        savefile=savedir+'/'+response.getheader("Content-disposition").split('=')[1]
-        with open(savefile, 'wb') as fh:
-            fh.write(data)
-        return savefile
+    def download_catalog(self, catname, savedir='./', ismed=False, overwrite=True):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/catalog"
+        params = {'name': catname, 'token': self.token}
+        return self.download(url, savedir, params, overwrite)        
 
-    def getUrl(self, url, params=None):
-        if params is None:
-            response = urllib.request.urlopen(url)
-        else:
-            response = urllib.request.urlopen(url, urllib.parse.urlencode(params).encode('utf-8'))
-        chrset = response.headers.get_content_charset()
-        if chrset is None: chrset='utf-8'
-        data = response.read().decode(chrset)
-        return data
+    def download_fits(self, obsid, ismed=False, savedir='./', overwrite=True):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/spectrum/fits"
+        params = {'obsid': obsid, 'token': self.token}
+        return self.download(url, savedir, params, overwrite)
 
-    def downloadCatalog(self, catname, savedir='./'):
-        caturl='{0}/catdl?name={1}&token={2}'.format(self.__getRoot(), catname, self.token)
-        return self.download(caturl, savedir)
+    def download_png(self, obsid, savedir='./', ismed=False, overwrite=True):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/spectrum/png"
+        params = {'obsid': obsid, 'token': self.token}
+        return self.download(url, savedir, params, overwrite)
 
-    def downloadFits(self, obsid, ismed=False, savedir='./'):
-        if not self.__detectToken(): return
-        fitsurl='{0}/{1}spectrum/fits/{2}?token={3}'.format(self.__getRoot(),'med' if ismed else '', obsid, self.token)
-        return self.download(fitsurl, savedir)
+    def get_fits_csv(self, obsid, ismed=False):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/spectrum/fits2csv"
+        params = {'obsid': obsid, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.text
 
-    def downloadPng(self, obsid, savedir='./'):
-        if not self.__detectToken(): return
-        pngurl='{0}/spectrum/png/{1}?token={2}'.format(self.__getRoot(), obsid, self.token)
-        return self.download(pngurl, savedir)
+    def get_info(self, obsid, ismed=False):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/spectrum/info"
+        params = {'obsid': obsid, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json()
 
-    def getFitsCsv(self, obsid, ismed=False):
-        if not self.__detectToken(): return None
-        url='{0}/{1}spectrum/fits2csv/{2}?token={3}'.format(self.__getRoot(),'med' if ismed else '', obsid, self.token)
-        return self.getUrl(url)
+    def conesearch(self, ra, dec, radius, ismed=False, fmt='votable'):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/voservice/conesearch"
+        params = {'ra': ra, 'dec': dec, 'sr': radius, 'output.fmt': fmt, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json() if fmt == 'json' else response.text
 
-    def getInfo(self, obsid, ismed=False):
-        if not self.__detectToken(): return None
-        url='{0}/{1}spectrum/info/{2}'.format(self.__getRoot(),'med' if ismed else '', obsid)
-        info=self.getUrl(url, {'token':self.token})
-        info=json.loads(info)
-        res={}
-        if ismed:
-            return info['rows']
-        else:
-            for prop in info["response"]:
-                res[prop["what"]]=prop["data"]
-        return res
-
-    #Cone Search Protocol
-    def conesearch(self, ra, dec, radius, ismed=False):
-        if not self.__detectToken(): return
-        conesearchurl='{0}/{1}voservice/conesearch?ra={2}&dec={3}&sr={4}&token={5}'.format(self.__getRoot(),'med' if ismed else '', ra, dec, radius, self.token)
-        return self.getUrl(conesearchurl)
-
-    #Simple Spectral Access Protocol
-    def ssap(self, ra, dec, radius, ismed=False):
-        if not self.__detectToken(): return
-        ssapurl='{0}/{1}voservice/ssap?pos={2},{3}&size={4}&token={5}'.format(self.__getRoot(),'med' if ismed else '', ra, dec, radius, self.token)
-        return self.getUrl(ssapurl)
+    def ssap(self, ra, dec, radius, ismed=False, fmt='votable'):
+        resolution = 'mrs' if ismed else 'lrs'
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/{resolution}/voservice/ssap"
+        params = {'pos': f"{ra},{dec}", 'size': radius, 'output.fmt': fmt, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json() if fmt == 'json' else response.text
 
     def sql(self, sql, fmt='json'):
-        if not self.__detectToken(): return
-        sqlurl='{0}/sql/q?&token={1}'.format(self.__getRoot(), self.token)
-        return self.getUrl(sqlurl, {'output.fmt':fmt, 'sql':sql})
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/sql"
+        params = {'sql': sql, 'output.fmt': fmt, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json() if fmt == 'json' else response.text
 
-    def query(self, params,ismed=False):
-        if not self.__detectToken(): return
-        qurl='{0}{1}/q?token={2}'.format(self.__getRoot(),'/medcas' if ismed else '', self.token)
-        return self.getUrl(qurl, params)
+    def query_table(self, table_name, query_params):
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/table/{table_name}"
+        response = requests.post(url, json=query_params, params={'token': self.token}, verify=False)
+        return response.json() if query_params.get('format', 'json') == 'json' else response.text
     
-    def query2(self, params, files, ismed=False):
-        if not self.__detectToken(): return
-        qurl='{0}{1}/q?token={2}'.format(self.__getRoot(),'/medcas' if ismed else '',self.token)
-        r=requests.post(qurl, data=params, files=files)
-        return str(r.text)
+    def get_query_result_count(self, sqlid, ismed=False):
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/get_query_result_count"
+        params = {'sqlid': sqlid, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json()
     
-    def getQueryResultCount(self, sqlid, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows=1&page=1'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token)
-        r=requests.post(qurl)
-        info=json.loads(r.text)
-        return int(info["total"])
+    def get_query_result_by_page(self, sqlid, count, rows=10000, page=1, fmt='json'):
+        if page > count:
+            return []
+        if page * rows > count:
+            rows = count - (page - 1) * rows
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/get_query_result"
+        params = {'sqlid': sqlid, 'rows': rows, 'page': page, 'output.fmt': fmt, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json() if fmt == 'json' else response.text  
     
-    def __getQueryResultByPage(self, sqlid, pagesize=10000, pageindex=1, ismed=False):
-        qurl='{0}{1}/sqlid/{2}?token={3}&output.fmt=dbgrid&rows={4}&page={5}'.format(self.__getRoot(),'/medcas' if ismed else '', sqlid,self.token, pagesize, pageindex)
-        r=requests.post(qurl)
-        return json.loads(r.text)["rows"]
-    
-    def getQueryResult(self, sqlid):
-        count = self.getQueryResultCount(sqlid)
+    def get_query_result(self, sqlid,fmt='json'):
+        count = self.get_query_result_count(sqlid)
         pagesize=10000
         start = 1
         pageindex=1
         result=[]
         while start<count:
-            arr = self.__getQueryResultByPage(sqlid, pagesize, pageindex)
+            arr = self.get_query_result_by_page(sqlid, count, pagesize, pageindex, fmt=fmt)
             result.extend(arr)
             start+=pagesize
             pageindex+=1
         return result
     
-    def __downloadQueryResult(self, sqlid, filename):
-        res=self.getQueryResult(sqlid)
+    def download_query_result(self, sqlid, filename, fmt='csv'):
+        res=self.get_query_result(sqlid, fmt=fmt)
         f=csv.writer(open(filename,'w'))
         f.writerow(res[0].keys())  # header row
         for row in res:
             f.writerow(row.values())
-            
-    def downloadQueryResult(self, sqlid, filename):
-        f=csv.writer(open(filename,'w'))
-        #
-        count = self.getQueryResultCount(sqlid)
-        pagesize=10000
-        start = 1
-        pageindex=1
-        result=[]
-        headerWritten=False
-        while start<count:
-            arr = self.__getQueryResultByPage(sqlid, pagesize, pageindex)
-            if not headerWritten:
-                f.writerow(arr[0].keys())  # header row
-                headerWritten=True
-            #
-            for row in arr:
-                f.writerow(row.values())            
-            #
-            start+=pagesize
-            pageindex+=1
-        return result
     
-    def readLRSFits(self, filename):
+    def read_lrs_fits(self, filename):
         hdulist = astropy.io.fits.open(filename)
         len_list=len(hdulist)
         if 1==len_list:
@@ -216,18 +182,18 @@ class lamost:
         spec_smooth_15=scipy.signal.medfilt(specflux,15)
         return (wavelength, specflux, spec_smooth_7, spec_smooth_15)
     
-    def plotLRSFits(self, filename):
-        wavelength, specflux, spec_smooth_7, spec_smooth_15 = self.readLRSFits(filename)        
+    def plot_lrs_fits(self, filename):
+        wavelength, specflux, spec_smooth_7, spec_smooth_15 = self.read_lrs_fits(filename)        
         plt.figure().set_size_inches(18.5, 6.5, forward=True)
         plt.plot(wavelength, specflux)
         plt.xlabel('Wavelength [Ångströms]')
         plt.ylabel('Flux')
         plt.show()
         
-    def downloadAndPlotLRSSpectrum(self, obsid):
-        self.plotLRSFits(self.downloadFits(obsid))
+    def download_and_plot_lrs_spectrum(self, obsid):
+        self.plot_lrs_fits(self.download_fits(obsid, ismed=False))
     
-    def readMRSFits(self, filename):
+    def read_mrs_fits(self, filename):
         hdulist = astropy.io.fits.open(filename)
         len_list=len(hdulist)
         data={}
@@ -241,8 +207,8 @@ class lamost:
         #
         return data
     
-    def plotMRSFits(self, filename):
-        data = self.readMRSFits(filename)        
+    def plot_mrs_fits(self, filename):
+        data = self.read_mrs_fits(filename)        
         plt.figure().set_size_inches(18.5, 6.5, forward=True)
         for k,v in data.items():
             plt.plot(v['wavelength'], v['specflux'])
@@ -250,5 +216,5 @@ class lamost:
         plt.ylabel('Flux')
         plt.show()
         
-    def downloadAndPlotMRSSpectrum(self, obsid):
-        self.plotMRSFits(self.downloadFits(obsid,ismed=True))
+    def download_and_plot_mrs_spectrum(self, obsid):
+        self.plot_mrs_fits(self.download_fits(obsid,ismed=True))

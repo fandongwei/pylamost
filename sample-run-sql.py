@@ -1,7 +1,6 @@
 from pylamost import lamost
 import json
-lm=lamost(dataset=11, version=1.0)#init the lamost class
+lm=lamost(dr_version='dr10', sub_version='v2.0', is_dev=True)#init the lamost class
 sql='select * from combined limit 10'
 ret=lm.sql(sql, fmt='json')
-j = json.loads(ret)
-print(j)
+print(ret[-1])
