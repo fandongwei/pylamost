@@ -90,6 +90,12 @@ class lamost:
         params = {'obsid': obsid, 'token': self.token}
         response = requests.get(url, params=params, verify=False)
         return response.text
+    
+    def get_unique_id_and_related_obsids(self, obsid=None, ra=None, dec=None, radius=None):
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/get_unique_id_and_related_obsids"
+        params = {'obsid': obsid, 'ra': ra, 'dec': dec, 'radius': radius, 'token': self.token}
+        response = requests.get(url, params=params, verify=False)
+        return response.json()
 
     def get_info(self, obsid, ismed=False):
         resolution = 'mrs' if ismed else 'lrs'
@@ -189,9 +195,6 @@ class lamost:
         plt.xlabel('Wavelength [Ångströms]')
         plt.ylabel('Flux')
         plt.show()
-        
-    def download_and_plot_lrs_spectrum(self, obsid):
-        self.plot_lrs_fits(self.download_fits(obsid, ismed=False))
     
     def read_mrs_fits(self, filename):
         hdulist = astropy.io.fits.open(filename)
@@ -215,6 +218,3 @@ class lamost:
         plt.xlabel('Wavelength [Ångströms]')
         plt.ylabel('Flux')
         plt.show()
-        
-    def download_and_plot_mrs_spectrum(self, obsid):
-        self.plot_mrs_fits(self.download_fits(obsid,ismed=True))
