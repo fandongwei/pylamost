@@ -125,7 +125,7 @@ class lamost:
         return response.json() if fmt == 'json' else response.text
 
     def query_table(self, table_name, query_params):
-        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/table/{table_name}"
+        url = f"{self.openapi_base}/{self.dr_version}/{self.sub_version}/query/{table_name}"
         response = requests.post(url, json=query_params, params={'token': self.token}, verify=False)
         return response.json() if query_params.get('format', 'json') == 'json' else response.text
     
