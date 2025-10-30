@@ -20,7 +20,7 @@ class lamost:
         self.email = None
         self.token = token
         if is_dev:
-            self.openapi_base = 'https://www2.lamost.org/openapi'
+            self.openapi_base = 'https://lwww.lamost.org/openapi'
         else:
             self.openapi_base = 'https://www.lamost.org/openapi'
         self._detect_token()
