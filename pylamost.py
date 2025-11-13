@@ -48,6 +48,11 @@ class lamost:
         self.token=cf['token']
         return True
 
+    def get_dr_versions(self):
+        url = f"{self.openapi_base}/dr_versions"
+        response = requests.get(url, verify=False)
+        return response.json()
+
     def download(self, url, savedir='./', params=None, overwrite=True):
         response = requests.get(url, params=params, verify=False)
         filename = savedir + '/' + response.headers.get("Content-disposition").split('=')[1]
